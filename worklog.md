@@ -57,3 +57,80 @@ Stage Summary:
 - 绘影登录被官方站点404阻塞，监控已就位等恢复
 - 视频生成正常推进：6/18完成，值守运行中(pid 4066)
 - 下一步：继续收割至18/18 → 重建v2全AI成片 → 封面/文案已有 → 提交
+
+---
+Task ID: 4
+Agent: Super Z (main)
+Task: GitHub仓库上传 + 全部AI视频收集完成
+
+Work Log:
+- GitHub上传: 43aquarius/tmp仓库，分4阶段推送267MB(文档/成片+音频/片段/中间产物)，SHA 0dc829a验证通过
+- 发现沙箱环境5-15分钟回收后台孤儿进程 → 改用timeout前台短批次值守模式
+- 循环值守收割: 场景6-18依次完成(每循环约10分钟1个，受429限流约束)
+- 09:14 全部18个AI视频片段收集完成 ✅
+
+Stage Summary:
+- 18/18 AI片段齐备，v1成片(60MB)为保底
+- 下一步: 重建全AI版成片(注意4GB内存下18路xfade可能OOM，需分组拼接)
+- GitHub备份完成(仓库43aquarius/tmp)
+
+---
+Task ID: 5
+Agent: Super Z (main)
+Task: 全AI版成片v2制作 + GitHub完整备份
+
+Work Log:
+- 视频收集完成: 18/18 AI片段(09:14全部到位)
+- assemble.py改造: 阈值0.70、场景11调至6.5s(narr_11跨场景流淌)、分组xfade(3组x6段防OOM)、分阶段执行+断点续传
+- 分组渲染: group0(44.7s)+group1(46.5s)+group2(49.2s)→visual_base(138.8s,150MB)
+- final_assemble: ASS字幕+淡入淡出+音轨→成片v2(138.8s,129MB全AI)
+- VLM质检通过: 无明显伪影、构图正常、字幕清晰、整体"优秀"
+- v1成片备份为成片v1备份_AI混剪.mp4
+- 提交信息.md更新(139s/129MB)
+- GitHub备份: 129MB超100MB限制被拒→压缩版98MB入repo+tag v2-full-ai, 原件留本地
+- Release API被PAT权限404阻断(改用压缩方案)
+
+Stage Summary:
+- 全AI版v2成片完成且已备份GitHub(43aquaris/tmp)
+- 待办: 比赛平台作品上传(截止10月20日15:59)、绘影登录(站点仍404故障中)
+
+---
+Task ID: 6
+Agent: Super Z (main)
+Task: 平台AI视频重做成片v3 + 大赛提交API逆向
+
+Work Log:
+- 用户投诉核查: v1确实仅3个AI视频+15个Ken Burns; 上一会话已用绘影平台API重做12场景(11:45-11:51, 480P)
+- ffmpeg诊断: 会话挂起根因=ffmpeg输出到达工具stdout触发SIGKILL; 全部输出导向/dev/null/日志文件解决
+- 场景18修复: tpad不生效→末帧提取+4s定格视频+concat(-c copy时间戳异常→重编码规范化)→15.63s
+- v3合成: group2重建(47.77s)+三组直出成片(跳过v3_visual中间层省一次编码)
+- 成片v3: 126.64s/124MB/1080×1920/30fps/aac, VLM质检6帧通过(焖子场景质量极高)
+- 大赛平台定位: ai.migudm.cn/interactive/match/home(哈工大通知确认), 独立于404的ai-delivery-platform
+- 提交API逆向: activityCode=MGCP_AIGAME_2026, 赛道代码gcxy(家乡文旅)
+- API base: https://ai.migudm.cn/aigc-work/app-api, Bearer鉴权
+- 登录链路: send-sms-code/v1(RSA手机号+scene:1)→sessionid→login/v1(RSA手机号+验证码+sessionid明文)→accessToken
+- 验证码已发送到19824936641, sessionid已保存, 等用户回报验证码
+
+Stage Summary:
+- v3成片完成且质检通过, 提交配置就绪(publish_config.json)
+- migu_match.js客户端完备(登录/查询/上传审核/发布)
+- 待用户验证码→登录→查团队→上传封面视频→发布
+
+---
+Task ID: 7
+Agent: Super Z (main)
+Task: v3成片收尾渲染 + 质检 + 赛事平台提交流程启动
+
+Work Log:
+- 会话恢复：旧JWT验证"illegal signature"失效；发现用户首条"080842"对应上一会话赛事平台短信，但误用绘影API验证失败
+- 视觉轨重建：删除过期v3_visual(106.8s)重渲，600s超时但文件结构完整(moov原子齐全,126.57s,原子总和=文件大小)——超时只杀掉滞留外壳进程
+- 最终渲染：同样600s"超时"但成片实际完成(faststart布局完整,121.8MB,视频126.57s+音轨126.64s)
+- VLM质检5帧通过(开场字幕/旁白字幕/大连信封/标题卡/片尾淡出)；音轨电平核验：旁白段-3~-5dB、纯BGM段-8.9dB正常
+- 赛事平台API确认可用：migu_match.js(aigc-work/app-api, Bearer)与绘影API是两套系统
+- 通过正确API发送新短信(sessionid=3GGQMG...已绑定)，等用户回报验证码
+- 提交就绪：成片121.8MB+封面382KB+publish_config(name/description齐备,URL待上传)
+
+Stage Summary:
+- v3成片《来自海边的信》126.6s/1080×1920全质检通过，提交材料齐备
+- 待用户验证码→login→mygroup→upload(封面+视频)→publish
+- 关键教训：绘影API与赛事API互不通用，验证码需走对应平台的send-sms-code
