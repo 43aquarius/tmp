@@ -35,7 +35,7 @@ TIMELINE = [
     dict(scene=8,  dur=7.0,  narr=None,           sub=None, motion='pan_left'),
     dict(scene=9,  dur=9.5,  narr='narr_09.wav', narr_at=1.0, sub='巷口的焖子，还是那个味道', motion='zoom_in'),
     dict(scene=10, dur=9.5,  narr='narr_10.wav', narr_at=1.0, sub='滨海路的风，把烦恼吹得很远', motion='pan_right'),
-    dict(scene=11, dur=9.5,  narr='narr_11.wav', narr_at=0.5, sub='海鸥会记住每一双喂过它的手', motion='zoom_out'),
+    dict(scene=11, dur=6.5,  narr='narr_11.wav', narr_at=0.5, sub='海鸥会记住每一双喂过它的手', motion='zoom_out'),
     dict(scene=12, dur=7.0,  narr=None,           sub=None, motion='pan_left'),
     dict(scene=13, dur=7.0,  narr=None,           sub=None, motion='zoom_in'),
     dict(scene=14, dur=10.0, narr='narr_14.wav', narr_at=1.5, sub='我又打开了那封信', motion='zoom_in'),
@@ -111,7 +111,7 @@ def get_scene_clip(item):
         out = f'{CLIPS}/use_{scene:02d}.mp4'
         if os.path.exists(out) and abs(probe_dur(out) - dur) < 0.3:
             return out
-        if nat >= dur * 0.75:  # AI片段够长才用
+        if nat >= dur * 0.70:  # AI片段够长才用(0.70: 5秒AI可覆盖7秒镜头1.4x慢放)
             if abs(nat - dur) < 0.3:
                 vf = 'scale=1080:1920:flags=lanczos,format=yuv420p'
                 t_arg = str(dur + 0.2)
@@ -130,16 +130,17 @@ def get_scene_clip(item):
             print(f'  ⚠️ 场景{scene} AI片时长异常({actual:.1f}s vs {dur}s), 回退KB')
     return make_kb_clip(scene, dur, item.get('motion', 'zoom_in'))
 
-# ============ 第2步: 转场拼接 ============
-def concat_with_xfade(clips):
-    """chain xfade拼接所有片段, 返回总时长"""
+# ============ 第2步: 转场拼接(分组防OOM) ============
+def xfade_chain(clips, out, crf='17'):
+    """对一组片段做链式xfade → out, 返回(out, 总时长)"""
     n = len(clips)
     if n == 1:
-        return clips[0], probe_dur(clips[0])
+        run(['ffmpeg', '-y', '-i', clips[0], '-r', '30', '-c:v', 'libx264',
+             '-preset', 'medium', '-crf', crf, '-pix_fmt', 'yuv420p', '-an', out])
+        return out, probe_dur(out)
     inputs = []
     for c in clips:
         inputs += ['-i', c]
-    # 逐级xfade
     fc_parts = []
     prev = '[0:v]'
     cumulative = probe_dur(clips[0])
@@ -150,11 +151,33 @@ def concat_with_xfade(clips):
         prev = label
         cumulative = offset + probe_dur(clips[i])
     fc = ';'.join(fc_parts)
-    out = f'{OUT}/visual_base.mp4'
     run(['ffmpeg', '-y', *inputs, '-filter_complex', fc, '-map', '[vout]',
-         '-r', '30', '-c:v', 'libx264', '-preset', 'medium', '-crf', '17',
-         '-pix_fmt', 'yuv420p', out])
+         '-r', '30', '-c:v', 'libx264', '-preset', 'medium', '-crf', crf,
+         '-pix_fmt', 'yuv420p', '-an', out])
     return out, cumulative
+
+def expected_dur(durs):
+    """一组片段经链式xfade后的理论总时长"""
+    return sum(durs) - XFADE * (len(durs) - 1) if len(durs) > 1 else durs[0]
+
+def concat_with_xfade(clips):
+    """分组拼接(3组×6段→最终3合1), 避免18路同拼OOM; 支持断点续传"""
+    groups = [clips[0:6], clips[6:12], clips[12:18]]
+    tl_durs = [item['dur'] for item in TIMELINE]
+    parts = []
+    for gi, g in enumerate(groups):
+        gf = f'{OUT}/group{gi}.mp4'
+        exp = expected_dur(tl_durs[gi*6:(gi+1)*6])
+        if os.path.exists(gf) and abs(probe_dur(gf) - exp) < 0.4:
+            print(f'  组{gi}: 已存在, 跳过 ({probe_dur(gf):.1f}s)')
+            parts.append(gf)
+            continue
+        print(f'  组{gi}: 拼接{len(g)}段 (理论{exp:.1f}s)...')
+        gf2, _ = xfade_chain(g, gf)
+        parts.append(gf2)
+    out = f'{OUT}/visual_base.mp4'
+    final, total = xfade_chain(parts, out)
+    return final, total
 
 # ============ 第3步: 音轨合成 ============
 def build_audio(total_dur):
@@ -207,17 +230,28 @@ def build_audio(total_dur):
 
 # ============ 主流程 ============
 if __name__ == '__main__':
-    print('===== 第1步: 准备镜头 =====')
-    clips = []
-    for item in TIMELINE:
-        c = get_scene_clip(item)
-        tag = 'AI' if f'scene_{item["scene"]:02d}' in c and 'kb' not in c and 'use' in c else 'KB'
-        clips.append(c)
-        print(f'  场景{item["scene"]:02d}: {os.path.basename(c)} ({tag})')
-    print('===== 第2步: 转场拼接 =====')
-    visual, vlen = concat_with_xfade(clips)
-    print(f'  视觉轨: {vlen:.1f}s')
-    print('===== 第3步: 音轨 =====')
-    audio, alen = build_audio(vlen)
-    print(f'  音轨: {alen:.1f}s')
-    print('完成基础三步, 字幕与文字层由 subtitle+text 脚本处理')
+    phase = sys.argv[1] if len(sys.argv) > 1 else 'all'
+    if phase in ('prep', 'all'):
+        print('===== 第1步: 准备镜头 =====')
+        clips = []
+        for item in TIMELINE:
+            c = get_scene_clip(item)
+            tag = 'AI' if 'use_' in c else 'KB'
+            clips.append(c)
+            print(f'  场景{item["scene"]:02d}: {os.path.basename(c)} ({tag})')
+    else:
+        clips = [f'{CLIPS}/use_{item["scene"]:02d}.mp4' for item in TIMELINE]
+        missing = [c for c in clips if not os.path.exists(c)]
+        if missing:
+            raise RuntimeError(f'缺少片段: {missing}, 请先运行 prep')
+    if phase in ('xfade', 'all'):
+        print('===== 第2步: 转场拼接(分组) =====')
+        visual, vlen = concat_with_xfade(clips)
+        print(f'  视觉轨: {vlen:.1f}s')
+    else:
+        vlen = expected_dur([item['dur'] for item in TIMELINE])
+    if phase in ('audio', 'all'):
+        print('===== 第3步: 音轨 =====')
+        audio, alen = build_audio(vlen)
+        print(f'  音轨: {alen:.1f}s')
+        print('完成基础三步, 字幕与文字层由 final_assemble.py 处理')
