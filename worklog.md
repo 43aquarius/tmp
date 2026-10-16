@@ -134,3 +134,25 @@ Stage Summary:
 - v3成片《来自海边的信》126.6s/1080×1920全质检通过，提交材料齐备
 - 待用户验证码→login→mygroup→upload(封面+视频)→publish
 - 关键教训：绘影API与赛事API互不通用，验证码需走对应平台的send-sms-code
+
+---
+Task ID: 8
+Agent: Super Z (main)
+Task: 赛事平台提交 + GitHub Release备份（全流程完成）
+
+Work Log:
+- 用户验证码412800登录赛事平台成功(aigc-work/app-api, migu_match.js)
+- 团队确认: 你们说的对(东北赛区/辽宁, 队长谭畅·大连理工, OWNER)
+- 封面上传: cover_final_1792161684683.jpg (OSS)
+- 视频上传: 116.2MB前台直传成功(后台setsid被沙箱快速回收, 前台595s窗口够用)
+- 发布成功: 作品ID 501, activityVideoWorkId 246, daily剩余5→4
+- 内容审核: audit-content-8239...→auditStatus=2 审核通过
+- GitHub网络恢复; 发现旧remote仓库名笔误(43aquaris→43aquarius)即此前Release 404根因
+- Release v3-migu-platform创建成功(#415075928): 原版视频116.2MB+封面+提交文档三附件, 资产重命名为LaiZiHaiBianDeXin_final_v3.mp4(中文会被GitHub转下划线)
+- git仓库: pull --rebase后推送f955e1c(scripts_v3/平台客户端+合成管线+提交配置+作品状态)
+- 安全处理: match_token.json含accessToken已从公开仓库移除
+
+Stage Summary:
+- ✅ 参赛提交完成且审核通过(作品ID 501, 提前截止日4天)
+- ✅ GitHub双重备份: Release原版+仓库代码文档
+- 项目闭环: 制作→质检→提交→备份全流程完成
