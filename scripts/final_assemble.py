@@ -22,7 +22,7 @@ TIMELINE = [
     dict(scene=8,  dur=7.0,  narr_at=None, sub=None),
     dict(scene=9,  dur=9.5,  narr_at=1.0, sub='巷口的焖子，还是小时候的味道'),
     dict(scene=10, dur=9.5,  narr_at=1.0, sub='滨海路的风，把烦恼吹得很远'),
-    dict(scene=11, dur=9.5,  narr_at=0.5, sub='海鸥会记住，每一双喂过它的手'),
+    dict(scene=11, dur=6.5,  narr_at=0.5, sub='海鸥会记住，每一双喂过它的手'),
     dict(scene=12, dur=7.0,  narr_at=None, sub=None),
     dict(scene=13, dur=7.0,  narr_at=None, sub=None),
     dict(scene=14, dur=10.0, narr_at=1.5, sub='黄昏时，我又打开了那封信'),
